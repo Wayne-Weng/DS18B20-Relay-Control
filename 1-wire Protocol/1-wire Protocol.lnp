@@ -1,0 +1,8 @@
+"main.obj",
+"DS18B20.obj",
+"delaytime.obj",
+"IO.obj",
+"UART.obj",
+"seven_seg.obj" 
+TO "1-wire Protocol" 
+RAMSIZE(256) 

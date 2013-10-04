@@ -1,0 +1,312 @@
+C51 COMPILER V9.50a   DS18B20                                                              06/06/2013 22:24:48 PAGE 1   
+
+
+C51 COMPILER V9.50a, COMPILATION OF MODULE DS18B20
+OBJECT MODULE PLACED IN DS18B20.OBJ
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE DS18B20.c BROWSE INCDIR(.\Main;.\Source;..\1-wire Protocol) DEBUG OBJECTEXT
+                    -END TABS(2)
+
+line level    source
+
+   1          
+   2          //
+   3          //  DS18B20 Control Drivers
+   4          //  Tested with MPC82G516 @ fosc of 24MHz
+   5          //
+   6          //  Date:2013/6/3 (First Implemented)
+   7          //                 DS18B20_SendCMD();
+   8          //       2013/6/6  
+   9          //                 DS18B20_ReadTemp();
+  10          //                 DS18B20_CheckPower();
+  11          //                 DS18B20_WriteScratchPad();
+  12          //
+  13          //************************************************************************
+  14          
+  15          #include "reg_mpc82g516.h"
+  16          #include "DS18B20.h"
+  17          #include "IO.h"
+  18          #include "typedef.h"
+  19          #include "delaytime.h"
+  20          
+  21          //the reset signal following by the presence signal from DS18B20
+  22          DS18B20_EXISTENCE DS18B20_Reset(void){
+  23   1        
+  24   1        Bus=1;                  //make sure the output is 1 to avoid improper pulse
+  25   1        IOConfig(1,1,3);        //P11 Open Collector (Active Low) 
+  26   1        Bus=0;
+  27   1        delay_us(700);          //Reset Signal to DS18B20, at least 480us, 700=about 500us
+  28   1        IOConfig(1,1,2);        //P11 Hi-Z Input. Release bus, pull up by Resistor
+  29   1        Bus=1;                  //set the output reg back to 1
+  30   1        
+  31   1      //  delay_us(5);            //Prevent rise time being captured
+  32   1      //  
+  33   1      //  while(Bus==1);          //Wait for the presence response
+  34   1      //  while(Bus==0);          //Wait for the end of presence response
+  35   1      //  
+  36   1      //  delay_us(5);            //Wait for a few us
+  37   1        
+  38   1        delay_us(110);            //Wait about 80us to the middle of presence response
+  39   1        
+  40   1        if(Bus==0){
+  41   2          while(Bus==0);          //if the bus is low, then wait for the rising edge(end of presence response)
+  42   2          delay_us(5);            //Wait for a few us
+  43   2          return PRESENCE;
+  44   2        }
+  45   1        else{
+  46   2          return ABSENCE;
+  47   2        }
+  48   1        
+  49   1      }
+  50          
+  51          //ROM SkipROM:0xCC
+  52          void DS18B20_CMD_ROM_SkipROM(void){
+  53   1        
+  54   1        DS18B20_Write0();   //LSB
+C51 COMPILER V9.50a   DS18B20                                                              06/06/2013 22:24:48 PAGE 2   
+
+  55   1        DS18B20_Write0();
+  56   1        DS18B20_Write1();
+  57   1        DS18B20_Write1();
+  58   1        DS18B20_Write0();
+  59   1        DS18B20_Write0();
+  60   1        DS18B20_Write1();
+  61   1        DS18B20_Write1();   //MSB
+  62   1        
+  63   1      }
+  64          
+  65          //FUNC Convert T:0x44
+  66          void DS18B20_CMD_FUNC_ConvertT(void){
+  67   1        
+  68   1        DS18B20_Write0();   //LSB
+  69   1        DS18B20_Write0();
+  70   1        DS18B20_Write1();
+  71   1        DS18B20_Write0();
+  72   1        DS18B20_Write0();
+  73   1        DS18B20_Write0();
+  74   1        DS18B20_Write1();
+  75   1        DS18B20_Write0();   //MSB
+  76   1        
+  77   1      }
+  78          
+  79          //FUNC Read Scratchpad:0xBE
+  80          void DS18B20_CMD_FUNC_ReadScratchpad(void){
+  81   1        
+  82   1        DS18B20_Write0();   //LSB
+  83   1        DS18B20_Write1();
+  84   1        DS18B20_Write1();
+  85   1        DS18B20_Write1();
+  86   1        DS18B20_Write1();
+  87   1        DS18B20_Write1();
+  88   1        DS18B20_Write0();
+  89   1        DS18B20_Write1();   //MSB
+  90   1        
+  91   1      }
+  92          
+  93          //Command sending, shift bit sending (LSB to MSB). 8 bits total.
+  94          void DS18B20_SendCMD(u8 cmd){
+  95   1      
+  96   1        u8 shift=0;
+  97   1        
+  98   1        while(shift<8){
+  99   2          //check if the bit is "0"
+ 100   2          //NOTICE: "==" is first proccesed if there's no "()" for the "&" bitwise operation?!?!How's that?
+ 101   2          if((cmd&(0x01<<shift))==0x00){
+ 102   3            DS18B20_Write0();
+ 103   3          }
+ 104   2          //the bit is not "0", then it's "1"
+ 105   2          else{
+ 106   3            DS18B20_Write1();
+ 107   3          }
+ 108   2          shift++;
+ 109   2        }
+ 110   1        
+ 111   1      }
+ 112          
+ 113          //Read the Temp out of scratchpad and put into the variables
+ 114          void DS18B20_ReadTemp(u8* const tempIntegerAddr,u16* const tempFloatAddr){
+ 115   1      
+ 116   1        //clear the L,H Bytes
+C51 COMPILER V9.50a   DS18B20                                                              06/06/2013 22:24:48 PAGE 3   
+
+ 117   1        u8 tempByteL=0x00,tempByteH=0x00;
+ 118   1        u8 shift=0;
+ 119   1        //Read the L temp Byte on the scratchpad
+ 120   1        for(shift=0;shift<8;shift++){
+ 121   2          tempByteL|=DS18B20_ReadSlot()<<shift;
+ 122   2        }
+ 123   1        //Read the H temp Byte on the scratchpad
+ 124   1        for(shift=0;shift<8;shift++){
+ 125   2          tempByteH|=DS18B20_ReadSlot()<<shift;
+ 126   2        }
+ 127   1        //Parse the Integer value of temp(8bit with sign bit on the MSB, 2's complement)
+ 128   1        *tempIntegerAddr=(tempByteL>>4)|(tempByteH<<4);
+ 129   1        //Parse the Float value of temp into Integer form(16bit) 625*0(=0)~625*15(=9375) 0.0625 C ~ 0.9375 C
+ 130   1        *tempFloatAddr=0x0271*(tempByteL&0x0F);
+ 131   1        
+ 132   1      }
+ 133          
+ 134          //Check the power mode of DS18B20
+ 135          DS18B20_POWER DS18B20_CheckPower(void){
+ 136   1        
+ 137   1        if(DS18B20_ReadSlot()==PWR_EXTERNAL){
+ 138   2          return EXTERNAL;
+ 139   2        }
+ 140   1        else{
+ 141   2          return PARASITE;
+ 142   2        }
+ 143   1        
+ 144   1      }
+ 145          
+ 146          //Write scratchpad Bytes(TH, TL and Configuration bits(Convert resolution))
+ 147          void DS18B20_WriteScratchPad(u8 bitNum,u8 tempH,u8 tempL){
+ 148   1        
+ 149   1        u8 shift=0;
+ 150   1        
+ 151   1        //Write Temp H trigger value
+ 152   1        for(shift=0;shift<8;shift++){
+ 153   2          //check if the bit is "0"
+ 154   2          //NOTICE: "==" is first proccesed if there's no "()" for the "&" bitwise operation?!?!How's that?
+ 155   2          if((tempH&(0x01<<shift))==0x00){
+ 156   3            DS18B20_Write0();
+ 157   3          }
+ 158   2          //the bit is not "0", then it's "1"
+ 159   2          else{
+ 160   3            DS18B20_Write1();
+ 161   3          }
+ 162   2        }
+ 163   1        
+ 164   1        //Write Temp L trigger value
+ 165   1        for(shift=0;shift<8;shift++){
+ 166   2          //check if the bit is "0"
+ 167   2          //NOTICE: "==" is first proccesed if there's no "()" for the "&" bitwise operation?!?!How's that?
+ 168   2          if((tempL&(0x01<<shift))==0x00){
+ 169   3            DS18B20_Write0();
+ 170   3          }
+ 171   2          //the bit is not "0", then it's "1"
+ 172   2          else{
+ 173   3            DS18B20_Write1();
+ 174   3          }
+ 175   2        }
+ 176   1        
+ 177   1        if(bitNum==9){
+ 178   2          //Write Configuration bits(Convert resolution:9)
+C51 COMPILER V9.50a   DS18B20                                                              06/06/2013 22:24:48 PAGE 4   
+
+ 179   2          for(shift=0;shift<8;shift++){
+ 180   3            //check if the bit is "0"
+ 181   3            //NOTICE: "==" is first proccesed if there's no "()" for the "&" bitwise operation?!?!How's that?
+ 182   3            if((Res_9_bits&(0x01<<shift))==0x00){
+ 183   4              DS18B20_Write0();
+ 184   4            }
+ 185   3            //the bit is not "0", then it's "1"
+ 186   3            else{
+ 187   4              DS18B20_Write1();
+ 188   4            }
+ 189   3          }
+ 190   2        }
+ 191   1        else if(bitNum==10){
+ 192   2          //Write Configuration bits(Convert resolution:10)
+ 193   2          for(shift=0;shift<8;shift++){
+ 194   3            //check if the bit is "0"
+ 195   3            //NOTICE: "==" is first proccesed if there's no "()" for the "&" bitwise operation?!?!How's that?
+ 196   3            if((Res_10_bits&(0x01<<shift))==0x00){
+ 197   4              DS18B20_Write0();
+ 198   4            }
+ 199   3            //the bit is not "0", then it's "1"
+ 200   3            else{
+ 201   4              DS18B20_Write1();
+ 202   4            }
+ 203   3          }
+ 204   2        }
+ 205   1        else if(bitNum==11){
+ 206   2          //Write Configuration bits(Convert resolution:11)
+ 207   2          for(shift=0;shift<8;shift++){
+ 208   3            //check if the bit is "0"
+ 209   3            //NOTICE: "==" is first proccesed if there's no "()" for the "&" bitwise operation?!?!How's that?
+ 210   3            if((Res_11_bits&(0x01<<shift))==0x00){
+ 211   4              DS18B20_Write0();
+ 212   4            }
+ 213   3            //the bit is not "0", then it's "1"
+ 214   3            else{
+ 215   4              DS18B20_Write1();
+ 216   4            }
+ 217   3          }
+ 218   2        }
+ 219   1        else{
+ 220   2          //Write Configuration bits(Convert resolution:12) as a default set
+ 221   2          for(shift=0;shift<8;shift++){
+ 222   3            //check if the bit is "0"
+ 223   3            //NOTICE: "==" is first proccesed if there's no "()" for the "&" bitwise operation?!?!How's that?
+ 224   3            if((Res_12_bits&(0x01<<shift))==0x00){
+ 225   4              DS18B20_Write0();
+ 226   4            }
+ 227   3            //the bit is not "0", then it's "1"
+ 228   3            else{
+ 229   4              DS18B20_Write1();
+ 230   4            }
+ 231   3          }
+ 232   2        }
+ 233   1        
+ 234   1      }
+ 235          
+ 236          
+ 237          //Write bit "0" to DS18B20
+ 238          void DS18B20_Write0(void){
+ 239   1      
+ 240   1        //Bus=1;                  //make sure the output is 1 to avoid improper pulse
+C51 COMPILER V9.50a   DS18B20                                                              06/06/2013 22:24:48 PAGE 5   
+
+ 241   1        IOConfig(1,1,3);        //P11 Open Collector (Active Low) 
+ 242   1        Bus=0;                  //Initiates a write slot
+ 243   1        delay_us(90);           //90=about 6x us for entire writing time slot duration
+ 244   1        Bus=1;                  //Release the bus into recovery time
+ 245   1      //  delay_us(1);            //1=about 1.9us recovery time
+ 246   1        delay_us(2);
+ 247   1        
+ 248   1      }
+ 249          
+ 250          //Write bit "1" to DS18B20
+ 251          void DS18B20_Write1(void){
+ 252   1        
+ 253   1        //Bus=1;                  //make sure the output is 1 to avoid improper pulse
+ 254   1        IOConfig(1,1,3);        //P11 Open Collector (Active Low) 
+ 255   1        Bus=0;                  //Initiates a write slot
+ 256   1        delay_us(1);            //1=about 1.9us
+ 257   1        Bus=1;                  //Release the bus, pullup to 1
+ 258   1        delay_us(90);           //90=about 6x us for entire writing time slot duration
+ 259   1        
+ 260   1      }
+ 261          
+ 262          //Read bit "0" or "1" to Master from DS18B20
+ 263          u8 DS18B20_ReadSlot(void){
+ 264   1      
+ 265   1        u8 Bit=0;
+ 266   1        
+ 267   1        //Bus=1;                  //make sure the output is 1 to avoid improper pulse
+ 268   1        IOConfig(1,1,3);        //P11 Open Collector (Active Low)
+ 269   1        Bus=0;                  //Initiates a read slot
+ 270   1        delay_us(1);            //1=about 1.9us
+ 271   1        IOConfig(1,1,2);        //P11 Hi-Z Input. Release the bus
+ 272   1        delay_us(10);           //10=about us
+ 273   1        Bit=Bus;                //Capture the bit signal
+ 274   1        delay_us(80);           //80=about us
+ 275   1        Bus=1;                  //set the output reg back to 1
+ 276   1        
+ 277   1        return Bit;
+ 278   1      
+ 279   1      }
+ 280          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    683    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      16
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

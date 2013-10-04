@@ -1,0 +1,86 @@
+C51 COMPILER V9.50a   MAIN                                                                 06/06/2013 22:24:47 PAGE 1   
+
+
+C51 COMPILER V9.50a, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN main.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE Main\main.c BROWSE INCDIR(.\Main;.\Source;..\1-wire Protocol) DEBUG OBJECTE
+                    -XTEND PRINT(.\main.lst) TABS(2) OBJECT(main.obj)
+
+line level    source
+
+   1          #include "reg_mpc82g516.h"
+   2          #include "typedef.h"
+   3          #include "delaytime.h"
+   4          #include "IO.h"
+   5          #include "seven_seg.h"
+   6          #include "DS18B20.h"
+   7          
+   8          void main(void){
+   9   1        
+  10   1        u8 tempInteger=0x00;
+  11   1        u16 tempFloat=0x0000;
+  12   1        
+  13   1        DS18B20_EXISTENCE SysExistance=EXI_UNKNOWN;
+  14   1        DS18B20_POWER SysPwr=PWR_UNKNOWN;
+  15   1        
+  16   1        //
+  17   1        SysExistance=DS18B20_Reset();
+  18   1        P14=1;
+  19   1        if(SysExistance==PRESENCE) P14=0;
+  20   1        DS18B20_SendCMD(CMD_ROM_SKIP);
+  21   1        DS18B20_SendCMD(CMD_FUNC_WRITESCRATCHPAD);
+  22   1        DS18B20_WriteScratchPad(9,T_127_C,T_0_C);
+  23   1        
+  24   1        //
+  25   1        SysExistance=DS18B20_Reset();
+  26   1        P14=1;
+  27   1        if(SysExistance==PRESENCE) P14=0;
+  28   1        DS18B20_SendCMD(CMD_ROM_SKIP);
+  29   1        DS18B20_SendCMD(CMD_FUNC_READPWR);
+  30   1        SysPwr=DS18B20_CheckPower();
+  31   1        P15=1;
+  32   1        if(SysPwr==EXTERNAL) P15=0;
+  33   1        
+  34   1        
+  35   1        while(1){
+  36   2          
+  37   2          //
+  38   2          SysExistance=DS18B20_Reset();
+  39   2          P14=1;
+  40   2          if(SysExistance==PRESENCE) P14=0;
+  41   2          DS18B20_SendCMD(CMD_ROM_SKIP);
+  42   2          DS18B20_SendCMD(CMD_FUNC_CONVERTT);
+  43   2          while(!DS18B20_ReadSlot());
+  44   2          
+  45   2          //
+  46   2          SysExistance=DS18B20_Reset();
+  47   2          P14=1;
+  48   2          if(SysExistance==PRESENCE) P14=0;
+  49   2          DS18B20_SendCMD(CMD_ROM_SKIP);
+  50   2          DS18B20_SendCMD(CMD_FUNC_READSCRATCHPAD);
+  51   2          DS18B20_ReadTemp(&tempInteger,&tempFloat);
+  52   2          
+  53   2          if(P20==0){
+  54   3            scan(tempFloat);
+C51 COMPILER V9.50a   MAIN                                                                 06/06/2013 22:24:47 PAGE 2   
+
+  55   3          }
+  56   2          if(P20!=0){
+  57   3            scan(tempInteger);
+  58   3          }
+  59   2        }
+  60   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    177    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----       5
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,63 @@
+C51 COMPILER V9.50a   UART                                                                 06/06/2013 22:24:49 PAGE 1   
+
+
+C51 COMPILER V9.50a, COMPILATION OF MODULE UART
+OBJECT MODULE PLACED IN UART.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE Source\UART.c BROWSE INCDIR(.\Main;.\Source;..\1-wire Protocol) DEBUG OBJEC
+                    -TEXTEND PRINT(.\UART.lst) TABS(2) OBJECT(UART.obj)
+
+line level    source
+
+   1          #include <reg_mpc82g516.h>
+   2          #include <typedef.h>
+   3          #include <delaytime.h>
+   4          
+   5          void UART_Reg_Init(void);
+   6          void UART_WriteByte(u8 inputByte);    //Byte Transmit process
+   7          u8 UART_GetByte(void);                //Byte Receive process
+   8          
+   9          void UART_Reg_Init(void){
+  10   1        //Timer Setup
+  11   1        TMOD|=0x20;                   //set T1 in 8bit Auto-Reload Mode for use of Baud Rate Generator
+  12   1        AUXR2|=0x40;                  //set T1 clock source from Fosc
+  13   1        TL1=0xF4;                     //set TL1 initial value, for 115200BR
+  14   1        TH1=0xF4;                     //set reload value, for 115200BR
+  15   1        
+  16   1        //Serial Port Setup
+  17   1        SCON|=0x50;                   //set Serial Port in Mode 1, enable serial reception
+  18   1        PCON|=0x80;                   //to get non-divided clocks from T1 for Baud Rate Generator
+  19   1        
+  20   1        /*
+  21   1         *NOTE: Fosc must be 22.1184MHz for above config.
+  22   1        */
+  23   1        
+  24   1        //Run Baud Rate Generator
+  25   1        TR1=1;
+  26   1      }
+  27          
+  28          void UART_WriteByte(u8 inputByte){
+  29   1        SBUF=inputByte;
+  30   1        TI=0;
+  31   1        while(TI!=1);
+  32   1      }
+  33          
+  34          u8 UART_GetByte(void){
+  35   1        RI=0;
+  36   1        while(RI!=1);
+  37   1        
+  38   1        return SBUF;
+  39   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     37    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

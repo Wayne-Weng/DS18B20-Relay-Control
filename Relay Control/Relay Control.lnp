@@ -1,0 +1,6 @@
+"main.obj",
+"delaytime.obj",
+"UART.obj",
+"IO.obj" 
+TO "Relay Control" 
+RAMSIZE(256) 
